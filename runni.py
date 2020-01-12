@@ -1,3 +1,4 @@
+import argparse
 import io
 import logging
 import re
@@ -22,10 +23,20 @@ logging.basicConfig(
 
 
 def main():
-    plot(**process_data(pd.read_csv(get_csv(), usecols=["date", "km"])))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-w",
+        "--window-width-days",
+        type=int,
+        default=14,
+        help="Window width for rolling window analysis (days). Default: 14",
+    )
+
+    opts = parser.parse_args()
+    plot(**process_data(pd.read_csv(get_csv(), usecols=["date", "km"]), opts))
 
 
-def process_data(df):
+def process_data(df, opts):
     # Keep only those rows that have a value set in the `km` column. That is
     # the criterion for having made a run on the corresponding day.
     df = df[df.km.notnull()]
