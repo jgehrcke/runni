@@ -94,6 +94,8 @@ def process_data(df, opts):
     #
     km_per_run = km_per_run.asfreq("1D", fill_value=0)
 
+    # Should be >= 7 to be meaningful.
+    window_width_days = opts.window_width_days
     # Count the number of events (requests) within the rolling window.
     window_width_days = 12  ## must at least 7 to be meaningful
     window = km_per_run.rolling(window="%sD" % window_width_days)
