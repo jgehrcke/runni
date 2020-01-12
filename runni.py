@@ -79,32 +79,49 @@ def process_data(df, opts):
     # will contain one data point per day, precisely, within the represented
     # time interval.
     #
-    # Before: In [28]: len(km_per_run) Out[28]: 75
+    # Before:
+    #   In [28]: len(km_per_run)
+    #   Out[28]: 75
     #
-    # In[27]: km_per_run.head() Out[27]: date 2019-05-27    2.7 2019-06-06 2.9
-    # 2019-06-11    4.6
-    # ...
+    #   In[27]: km_per_run.head()
+    #   Out[27]:
+    #   2019-05-27    2.7
+    #   2019-06-06    2.9
+    #   2019-06-11    4.6
+    #   ...
     #
-    # After: In [30]: len(km_per_run)
-    # # Out[30]: 229 Out[30]: 229
+    # After:
+    #   In [30]: len(km_per_run)
+    #   Out[30]: 229
     #
-    # In [31]: km_per_run.head() Out[31]: date 2019-05-27    2.7 2019-05-28 0.0
-    # 2019-05-29    0.0 2019-05-30    0.0
-    # ...
+    #   In [31]: km_per_run.head()
+    #   Out[31]:
+    #   2019-05-27    2.7
+    #   2019-05-28    0.0
+    #   2019-05-29    0.0
+    #   2019-05-30    0.0
+    #   ...
     #
     km_per_run = km_per_run.asfreq("1D", fill_value=0)
 
     # Should be >= 7 to be meaningful.
     window_width_days = opts.window_width_days
-    # Count the number of events (requests) within the rolling window.
-    window_width_days = 12  ## must at least 7 to be meaningful
     window = km_per_run.rolling(window="%sD" % window_width_days)
-    s = window.sum()
-    km_per_week = s / (window_width_days / 7.0)
 
-    new_column_name = "km_per_week_%sd_window" % window_width_days
-    km_per_week.rename(new_column_name, inplace=True)
+    # For each window position get the sum of distances. For normalization,
+    # divide this by the window width (in days) to get values of the unit
+    # km/day -- and then convert to the new desired unit of km/week with an
+    # additional factor of 7.
+    km_per_week = window.sum() / (window_width_days / 7.0)
 
+    # During the rolling window analysis the value derived from the current
+    # window position is assigned to the right window boundary (i.e. to the
+    # newest timestamp in the window). For presentation it is more convenient
+    # and intuitive to have it assigned to the temporal center of the time
+    # window. Invoking `rolling(..., center=True)` however yields
+    # `NotImplementedError: center is not implemented for datetimelike and
+    # offset based windows`. As a workaround, shift the data by half the window
+    # size to 'the left': shift the timestamp index by a constant / offset.
     offset = pd.DateOffset(days=window_width_days / 2.0)
     km_per_week.index = km_per_week.index - offset
 
