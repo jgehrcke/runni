@@ -33,7 +33,11 @@ def main():
     )
 
     opts = parser.parse_args()
-    plot(**process_data(pd.read_csv(get_csv(), usecols=["date", "km"]), opts))
+    plot(
+        **process_data(
+            pd.read_csv(get_csv(), usecols=["date", "km", "min", "sec"]), opts
+        )
+    )
 
 
 def process_data(df, opts):
@@ -54,6 +58,11 @@ def process_data(df, opts):
     # distance of the run.
     km_per_run = df["km"]
 
+    hours_per_run = (60 * df["min"] + df["sec"]) / 3600
+
+    # minutes per km
+    avgspeed_per_run = hours_per_run * 60 / km_per_run
+
     # There may have been more than one run per day. In these cases, sum up the
     # distances and have a single row represent all runs of the day.
 
@@ -65,8 +74,10 @@ def process_data(df, opts):
 
     # Group events per day and sum up the run distance:
     km_per_run = km_per_run.groupby(km_per_run.index).sum()
+    hours_per_run = hours_per_run.groupby(hours_per_run.index).sum()
+    avgspeed_per_run = avgspeed_per_run.groupby(avgspeed_per_run.index).mean()
 
-    # Outcome for above's example:
+    # Outcome for above's example (for `km_per_run`):
     # 2019-07-10    3.2
     # 2019-07-11    9.9
     # 2019-07-17    4.5
@@ -103,6 +114,8 @@ def process_data(df, opts):
     #   ...
     #
     km_per_run = km_per_run.asfreq("1D", fill_value=0)
+    hours_per_run = hours_per_run.asfreq("1D", fill_value=0)
+    avgspeed_per_run = avgspeed_per_run.asfreq("1D", fill_value=None)
 
     # Should be >= 7 to be meaningful.
     window_width_days = opts.window_width_days
@@ -114,6 +127,14 @@ def process_data(df, opts):
     # additional factor of 7.
     km_per_week = window.sum() / (window_width_days / 7.0)
 
+    # Do the same for run duration and speed, in less code
+    hours_per_week = hours_per_run.rolling(window="%sD" % window_width_days).sum() / (
+        window_width_days / 7.0
+    )
+    avgspeed_per_week = avgspeed_per_run.rolling(
+        window="%sD" % window_width_days
+    ).mean()
+
     # During the rolling window analysis the value derived from the current
     # window position is assigned to the right window boundary (i.e. to the
     # newest timestamp in the window). For presentation it is more convenient
@@ -124,20 +145,39 @@ def process_data(df, opts):
     # size to 'the left': shift the timestamp index by a constant / offset.
     offset = pd.DateOffset(days=window_width_days / 2.0)
     km_per_week.index = km_per_week.index - offset
+    hours_per_week.index = hours_per_week.index - offset
+    avgspeed_per_week.index = avgspeed_per_week.index - offset
 
     returndict = {}
-    for k in ("km_per_run", "km_per_week", "window_width_days"):
+    for k in (
+        "km_per_run",
+        "km_per_week",
+        "hours_per_run",
+        "hours_per_week",
+        "avgspeed_per_run",
+        "avgspeed_per_week",
+        "window_width_days",
+    ):
         returndict[k] = locals()[k]
 
     return returndict
 
 
-def plot(km_per_week, km_per_run, window_width_days):
+def plot(
+    km_per_week,
+    km_per_run,
+    hours_per_run,
+    hours_per_week,
+    avgspeed_per_run,
+    avgspeed_per_week,
+    window_width_days,
+):
 
     plt.style.use("ggplot")
     matplotlib_config()
-    plt.figure()
 
+    # First, distance over time.
+    plt.figure()
     ax = km_per_week.plot(linestyle="solid", color="black")
     ax2 = km_per_run.plot(
         linestyle="None", marker="x", color="gray", markersize=3, ax=ax
@@ -158,6 +198,53 @@ def plot(km_per_week, km_per_run, window_width_days):
     plt.title(title)
     plt.tight_layout()
     savefig(title)
+
+    # Now, run duration over time
+    plt.figure()
+    ax = hours_per_week.plot(linestyle="solid", color="black")
+    ax2 = hours_per_run.plot(
+        linestyle="None", marker="x", color="gray", markersize=3, ax=ax
+    )
+
+    ax2.set_xlabel("Time")
+    ax2.set_ylabel("Duration [hours]")
+
+    ax2.legend(
+        [
+            "duration per week, rolling window mean (%s days)" % window_width_days,
+            "duration per day (raw data)",
+        ],
+        numpoints=4,
+    )
+
+    title = "Running duration per week, over time"
+    plt.title(title)
+    plt.tight_layout()
+    savefig(title)
+
+    # Now, run velocity over time
+    plt.figure()
+    ax = avgspeed_per_week.plot(linestyle="solid", color="black")
+    ax2 = avgspeed_per_run.plot(
+        linestyle="None", marker="x", color="gray", markersize=3, ax=ax
+    )
+
+    ax2.set_xlabel("Time")
+    ax2.set_ylabel("Avg speed [min/km]")
+
+    ax2.legend(
+        [
+            "avg speed per week, rolling window mean (%s days)" % window_width_days,
+            "avg speed per day (raw data)",
+        ],
+        numpoints=4,
+    )
+
+    title = "Running velocity per week, over time"
+    plt.title(title)
+    plt.tight_layout()
+    savefig(title)
+
     plt.show()
 
 
