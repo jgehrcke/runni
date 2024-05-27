@@ -35,7 +35,7 @@ def main():
     opts = parser.parse_args()
     plot(
         **process_data(
-            pd.read_csv(get_csv(), usecols=["date", "km", "min", "sec"]), opts
+            pd.read_csv(get_csv(), usecols=["date", "km", "min", "sec", "bodypump"]), opts
         )
     )
 
@@ -43,7 +43,9 @@ def main():
 def process_data(df, opts):
     # Keep only those rows that have a value set in the `km` column. That is
     # the criterion for having made a run on the corresponding day.
-    df = df[df.km.notnull()]
+    df_full = df
+    df = df[df.km.notnull() | df.bodypump.notnull()]
+    #    df_bp = df_full[df_full.bodypump.notnull()]
 
     # Parse text in `date` column into a pd.Series of `datetime64` type values
     # and make this series be the new index of the data frame.
@@ -135,6 +137,12 @@ def process_data(df, opts):
         window="%sD" % window_width_days
     ).mean()
 
+    #print(df["bodypump"])
+    bpc = df["bodypump"].rolling(window="%sD" % window_width_days).count()
+    #print(bpc.tail(30))
+    #import sys
+    #sys.exit()
+
     # During the rolling window analysis the value derived from the current
     # window position is assigned to the right window boundary (i.e. to the
     # newest timestamp in the window). For presentation it is more convenient
@@ -147,6 +155,7 @@ def process_data(df, opts):
     km_per_week.index = km_per_week.index - offset
     hours_per_week.index = hours_per_week.index - offset
     avgspeed_per_week.index = avgspeed_per_week.index - offset
+    bpc.index = bpc.index - offset
 
     returndict = {}
     for k in (
@@ -157,6 +166,7 @@ def process_data(df, opts):
         "avgspeed_per_run",
         "avgspeed_per_week",
         "window_width_days",
+        "bpc"
     ):
         returndict[k] = locals()[k]
 
@@ -171,6 +181,7 @@ def plot(
     avgspeed_per_run,
     avgspeed_per_week,
     window_width_days,
+    bpc
 ):
 
     plt.style.use("ggplot")
@@ -182,6 +193,7 @@ def plot(
     ax2 = km_per_run.plot(
         linestyle="None", marker="x", color="gray", markersize=3, ax=ax
     )
+    ax3 = bpc.plot(linestyle="None", marker='x', color='red', markersize=5, ax=ax)
 
     ax2.set_xlabel("Time")
     ax2.set_ylabel("Distance [km]")
@@ -190,6 +202,7 @@ def plot(
         [
             "distance per week, rolling window mean (%s days)" % window_width_days,
             "distance per day (raw data)",
+            "bodypump # per rw"
         ],
         numpoints=4,
     )
